@@ -12,13 +12,13 @@ func tasksHandler(w http.ResponseWriter, r *http.Request) {
 
 	tasks, err := db.Tasks(search, 50)
 	if err != nil {
-		sendError(w, err.Error())
+		sendError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	resp, err := json.Marshal(map[string]interface{}{"tasks": tasks})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		sendError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 

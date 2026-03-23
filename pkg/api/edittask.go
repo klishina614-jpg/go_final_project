@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -13,19 +14,19 @@ import (
 func getTaskHandler(w http.ResponseWriter, r *http.Request) {
 	id := r.FormValue("id")
 	if id == "" {
-		sendError(w, "Не указан идентификатор")
+		sendError(w, "Не указан идентификатор", http.StatusBadRequest)
 		return
 	}
 
 	task, err := db.GetTask(id)
 	if err != nil {
-		sendError(w, "Задача не найдена")
+		sendError(w, "Задача не найдена", http.StatusNotFound)
 		return
 	}
 
 	resp, err := json.Marshal(task)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		sendError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
@@ -38,22 +39,23 @@ func editTaskHandler(w http.ResponseWriter, r *http.Request) {
 
 	_, err := buf.ReadFrom(r.Body)
 	if err != nil {
-		sendError(w, "Ошибка чтения запроса")
+		sendError(w, "Ошибка чтения запроса", http.StatusBadRequest)
 		return
 	}
 
 	if err = json.Unmarshal(buf.Bytes(), &task); err != nil {
-		sendError(w, "Ошибка десериализации JSON")
+		log.Println("ошибка десериализации:", err)
+		sendError(w, "Ошибка десериализации JSON", http.StatusBadRequest)
 		return
 	}
 
 	if task.ID == "" {
-		sendError(w, "Не указан идентификатор задачи")
+		sendError(w, "Не указан идентификатор задачи", http.StatusBadRequest)
 		return
 	}
 
 	if task.Title == "" {
-		sendError(w, "Не указан заголовок задачи")
+		sendError(w, "Не указан заголовок задачи", http.StatusBadRequest)
 		return
 	}
 
@@ -66,7 +68,7 @@ func editTaskHandler(w http.ResponseWriter, r *http.Request) {
 
 	t, err := time.Parse(DateFormat, task.Date)
 	if err != nil {
-		sendError(w, "Неверный формат даты")
+		sendError(w, "Неверный формат даты", http.StatusBadRequest)
 		return
 	}
 
@@ -74,7 +76,7 @@ func editTaskHandler(w http.ResponseWriter, r *http.Request) {
 	if task.Repeat != "" {
 		next, err = NextDate(now, task.Date, task.Repeat)
 		if err != nil {
-			sendError(w, err.Error())
+			sendError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 	}
@@ -90,7 +92,7 @@ func editTaskHandler(w http.ResponseWriter, r *http.Request) {
 
 	err = db.UpdateTask(&task)
 	if err != nil {
-		sendError(w, err.Error())
+		sendError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 

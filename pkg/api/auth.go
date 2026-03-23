@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 
@@ -17,13 +18,14 @@ func signinHandler(w http.ResponseWriter, r *http.Request) {
 	var buf bytes.Buffer
 	_, err := buf.ReadFrom(r.Body)
 	if err != nil {
-		sendError(w, "Ошибка чтения запроса")
+		sendError(w, "Ошибка чтения запроса", http.StatusBadRequest)
 		return
 	}
 
 	var data map[string]string
 	if err = json.Unmarshal(buf.Bytes(), &data); err != nil {
-		sendError(w, "Ошибка десериализации JSON")
+		log.Println("ошибка десериализации:", err)
+		sendError(w, "Ошибка десериализации JSON", http.StatusBadRequest)
 		return
 	}
 
@@ -31,7 +33,7 @@ func signinHandler(w http.ResponseWriter, r *http.Request) {
 	envPassword := os.Getenv("TODO_PASSWORD")
 
 	if password != envPassword {
-		sendError(w, "Неверный пароль")
+		sendError(w, "Неверный пароль", http.StatusUnauthorized)
 		return
 	}
 
@@ -44,11 +46,15 @@ func signinHandler(w http.ResponseWriter, r *http.Request) {
 
 	signedToken, err := jwtToken.SignedString([]byte(jwtSecret))
 	if err != nil {
-		sendError(w, "Ошибка создания токена")
+		sendError(w, "Ошибка создания токена", http.StatusInternalServerError)
 		return
 	}
 
-	resp, _ := json.Marshal(map[string]string{"token": signedToken})
+	resp, err := json.Marshal(map[string]string{"token": signedToken})
+	if err != nil {
+		sendError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.Write(resp)
 }

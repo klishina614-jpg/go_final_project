@@ -74,6 +74,10 @@ func Tasks(search string, limit int) ([]*Task, error) {
 		tasks = append(tasks, &task)
 	}
 
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
 	if tasks == nil {
 		tasks = []*Task{}
 	}

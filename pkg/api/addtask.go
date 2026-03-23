@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -16,17 +17,18 @@ func addTaskHandler(w http.ResponseWriter, r *http.Request) {
 
 	_, err := buf.ReadFrom(r.Body)
 	if err != nil {
-		sendError(w, "Ошибка чтения запроса")
+		sendError(w, "Ошибка чтения запроса", http.StatusBadRequest)
 		return
 	}
 
 	if err = json.Unmarshal(buf.Bytes(), &task); err != nil {
-		sendError(w, "Ошибка десериализации JSON")
+		log.Println("ошибка десериализации:", err)
+		sendError(w, "Ошибка десериализации JSON", http.StatusBadRequest)
 		return
 	}
 
 	if task.Title == "" {
-		sendError(w, "Не указан заголовок задачи")
+		sendError(w, "Не указан заголовок задачи", http.StatusBadRequest)
 		return
 	}
 
@@ -40,7 +42,7 @@ func addTaskHandler(w http.ResponseWriter, r *http.Request) {
 	// проверяем что дата корректная
 	t, err := time.Parse(DateFormat, task.Date)
 	if err != nil {
-		sendError(w, "Неверный формат даты")
+		sendError(w, "Неверный формат даты", http.StatusBadRequest)
 		return
 	}
 
@@ -49,7 +51,7 @@ func addTaskHandler(w http.ResponseWriter, r *http.Request) {
 	if task.Repeat != "" {
 		next, err = NextDate(now, task.Date, task.Repeat)
 		if err != nil {
-			sendError(w, err.Error())
+			sendError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 	}
@@ -66,22 +68,29 @@ func addTaskHandler(w http.ResponseWriter, r *http.Request) {
 
 	id, err := db.AddTask(&task)
 	if err != nil {
-		sendError(w, err.Error())
+		sendError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	resp, err := json.Marshal(map[string]interface{}{"id": fmt.Sprintf("%d", id)})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		sendError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.Write(resp)
 }
 
-// sendError формирует JSON-ответ с ошибкой
-func sendError(w http.ResponseWriter, msg string) {
+// sendError формирует JSON-ответ с ошибкой и выставляет HTTP-код
+func sendError(w http.ResponseWriter, msg string, status int) {
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	resp, _ := json.Marshal(map[string]string{"error": msg})
-	w.Write(resp)
+	w.WriteHeader(status)
+	resp, err := json.Marshal(map[string]string{"error": msg})
+	if err != nil {
+		log.Println("ошибка сериализации JSON:", err)
+		return
+	}
+	if _, err := w.Write(resp); err != nil {
+		log.Println("ошибка записи ответа:", err)
+	}
 }
